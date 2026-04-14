@@ -1,0 +1,15 @@
+2026-04-13 21:03:03,931 [ERROR] LOGIN FAIL (usuario no existe): Pachi desde ('127.0.0.1', 52005)
+2026-04-13 21:03:25,833 [INFO] REGISTER OK: Pachi desde ('127.0.0.1', 64902)
+2026-04-13 21:03:44,490 [INFO] MSG PUBLICO Pachi: hola
+2026-04-13 21:04:12,192 [ERROR] LOGIN FAIL (usuario no existe): pepe desde ('127.0.0.1', 54139)
+2026-04-13 21:04:25,829 [INFO] REGISTER OK: pepe desde ('127.0.0.1', 60723)
+2026-04-13 21:04:36,318 [INFO] MSG PUBLICO pepe: Hola
+2026-04-13 21:04:40,245 [INFO] MSG PUBLICO pepe: gay]
+2026-04-13 21:04:44,194 [INFO] DESCONEXION: pepe
+2026-04-13 21:06:30,942 [ERROR] Error en cliente Pachi: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
+2026-04-13 21:06:30,944 [INFO] DESCONEXION: Pachi
+2026-04-13 21:12:59,248 [ERROR] LOGIN FAIL (contrasena incorrecta): pepe desde ('127.0.0.1', 51257)
+2026-04-13 21:13:24,156 [ERROR] REGISTER FAIL (ya existe): Pachi desde ('127.0.0.1', 49268)
+2026-04-13 21:14:14,788 [INFO] REGISTER OK: Paco desde ('127.0.0.1', 52172)
+2026-04-13 21:14:46,365 [ERROR] LOGIN FAIL (contrasena incorrecta): Pachi desde ('127.0.0.1', 56397)
+2026-04-13 21:14:57,069 [ERROR] LOGIN FAIL (contrasena incorrecta): Pachi desde ('127.0.0.1', 56335)

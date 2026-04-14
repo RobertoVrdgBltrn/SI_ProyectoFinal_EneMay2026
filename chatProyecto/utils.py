@@ -1,45 +1,98 @@
-#utils.py
-
 import json
+import os
+import logging
+import bcrypt
 from datetime import datetime
 
-#Devuelve la fecha y hora actual como texto
+
+# ── Fecha y hora ────────────────────────────────────────────
 def fecha_hora():
+    """Devuelve la fecha y hora actual como texto."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
+def actual_str():
+    return fecha_hora()
+
+
+# ── Logging basico ──────────────────────────────────────────
+LOG_FILE = "chat.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()],
+)
+
+
+def log_evento(msg):
+    """Escribe una linea informativa en el log."""
+    logging.info(msg)
+
+
+def log_error(msg):
+    """Escribe una linea de error en el log."""
+    logging.error(msg)
+
+
+# ── Hasheo de contrasenas ───────────────────────────────────
+def hashear_password(password: str) -> str:
+    """Recibe texto plano, devuelve el hash bcrypt como string."""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
+
+
+def verificar_password(password: str, hashed: str) -> bool:
+    """Compara texto plano con el hash almacenado. Devuelve True si coinciden."""
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+
+# ── Base de datos de usuarios (archivo JSON) ────────────────
+USUARIOS_FILE = "usuarios.json"
+
+
+def cargar_usuarios() -> dict:
+    """Carga el diccionario {usuario: hash} desde disco.
+    Si el archivo no existe, devuelve un diccionario vacio."""
+    if not os.path.exists(USUARIOS_FILE):
+        return {}
+    with open(USUARIOS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def guardar_usuarios(usuarios: dict):
+    """Guarda el diccionario {usuario: hash} en disco."""
+    with open(USUARIOS_FILE, "w", encoding="utf-8") as f:
+        json.dump(usuarios, f, indent=2)
+
+
+# ── Mensajes JSON ───────────────────────────────────────────
 def crearMensaje(tipo, quien, texto="", para=None):
     """
     Crea un mensaje JSON listo para enviar por red.
-    tipo = tipo de mensaje (register, message, private, etc.)
+    tipo  = tipo de mensaje (register, login, message, private, etc.)
     quien = usuario que manda el mensaje
     texto = contenido principal del mensaje
-    para = destinatario si el mensaje es privado
+    para  = destinatario si el mensaje es privado
     """
-    msg = {
-        "type": tipo,
-        "from": quien,
-        "to": para,
-        "text": texto,
-        "time": fecha_hora()
-    }
+    msg = {"type": tipo, "from": quien, "to": para, "text": texto, "time": fecha_hora()}
     return json.dumps(msg)
 
-#Convierte texto JSON a un objeto de Python
+
 def convertir_mensaje(cadena):
+    """Convierte texto JSON a un objeto de Python. Devuelve None si falla."""
     try:
         return json.loads(cadena)
     except:
         return None
 
-#Devuelve la fecha y hora actual como texto
-def actual_str():
-    return fecha_hora()
 
-#Atajo para crear mensajes usando la misma funcion
-def crear_mensaje(msg_type, sender, text="", target=None):
-    
-    return crearMensaje(msg_type, sender, text, target)
-
-#Funcion usada por server.py para mantener compatibilidad
 def leerMensaje(cadena):
+    """Alias de convertir_mensaje, usado por server.py."""
     return convertir_mensaje(cadena)
+
+
+def crear_mensaje(msg_type, sender, text="", target=None):
+    """Alias de crearMensaje, usado por client.py."""
+    return crearMensaje(msg_type, sender, text, target)
