@@ -94,7 +94,7 @@ def atenderCliente_tcp(conn, addr):
         with conn:
             archivo = conn.makefile("r", encoding="utf-8")
 
-            # ── HANDSHAKE RSA ──────────────────────────────────────────
+            # HANDSHAKE RSA 
             primera = archivo.readline()
             if not primera:
                 return
@@ -113,7 +113,7 @@ def atenderCliente_tcp(conn, addr):
             hs_resp = json.dumps({"type": "key_exchange", "key": server_pub_str})
             conn.sendall(hs_resp.encode("utf-8") + b"\n")
 
-            # ── LEER PRIMER MENSAJE (LOGIN / REGISTER) CIFRADO ─────────
+            # LEER PRIMER MENSAJE (LOGIN / REGISTER) CIFRADO 
             segunda = archivo.readline()
             if not segunda:
                 return
@@ -124,7 +124,7 @@ def atenderCliente_tcp(conn, addr):
 
             msg = leerMensaje(desencriptado)
 
-            # ── LOGIN (usuario existente) ──────────────────────────
+            # LOGIN (usuario existente) 
             if msg and msg.get("type") == "login":
                 usuario_bd = cargar_usuarios()
                 pedido = msg.get("from")
@@ -155,7 +155,7 @@ def atenderCliente_tcp(conn, addr):
                 log_evento(f"LOGIN OK: {pedido} desde {addr}")
                 print(f"[{fecha_hora()}] {pedido} se conecto desde {addr}")
 
-            # ── REGISTRO (usuario nuevo) ───────────────────────────
+            # REGISTRO (usuario nuevo) 
             elif msg and msg.get("type") == "register":
                 pedido = msg.get("from")
                 pw_texto = msg.get("text", "")

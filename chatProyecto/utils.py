@@ -7,7 +7,7 @@ import base64
 from datetime import datetime
 
 
-# ── Fecha y hora ────────────────────────────────────────────
+# Fecha y hora 
 def fecha_hora():
     """Devuelve la fecha y hora actual como texto."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -17,7 +17,7 @@ def actual_str():
     return fecha_hora()
 
 
-# ── Logging basico ──────────────────────────────────────────
+# Logging basico 
 LOG_FILE = "chat.log"
 
 logging.basicConfig(
@@ -37,7 +37,7 @@ def log_error(msg):
     logging.error(msg)
 
 
-# ── Hasheo de contrasenas ───────────────────────────────────
+# Hasheo de contrasenas 
 def hashear_password(password: str) -> str:
     """Recibe texto plano, devuelve el hash bcrypt como string."""
     salt = bcrypt.gensalt()
@@ -50,7 +50,7 @@ def verificar_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-# ── Base de datos de usuarios (archivo JSON) ────────────────
+# Base de datos de usuarios (archivo JSON) 
 USUARIOS_FILE = "usuarios.json"
 
 
@@ -69,7 +69,7 @@ def guardar_usuarios(usuarios: dict):
         json.dump(usuarios, f, indent=2)
 
 
-# ── Mensajes JSON ───────────────────────────────────────────
+# Mensajes JSON 
 def crearMensaje(tipo, quien, texto="", para=None):
     """
     Crea un mensaje JSON listo para enviar por red.
@@ -100,7 +100,7 @@ def crear_mensaje(msg_type, sender, text="", target=None):
     return crearMensaje(msg_type, sender, text, target)
 
 
-# ── Criptografia RSA ──────────────────────────────────────────────
+# Criptografia RSA 
 def generar_claves_rsa():
     """Genera un par de llaves (Pública, Privada) de 1024 bits."""
     return rsa.newkeys(1024)

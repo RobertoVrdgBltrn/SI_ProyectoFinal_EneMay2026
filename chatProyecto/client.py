@@ -165,7 +165,7 @@ def enviar_mensajes_udp(sock, username, server_addr):
 # Inicio del cliente TCP
 def iniciar_cliente_tcp():
 
-    # ── Menú de autenticacion ──────────────────────────────
+    # Menú de autenticacion 
     print("1) Iniciar sesion")
     print("2) Registrarse")
     opcion = input("Elige una opcion: ").strip()
@@ -184,7 +184,7 @@ def iniciar_cliente_tcp():
         print("La contrasena no puede estar vacia.")
         return
 
-    # ── Conexion al servidor ───────────────────────────────
+    # Conexion al servidor 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((SERVER_HOST, SERVER_PORT))
@@ -195,7 +195,7 @@ def iniciar_cliente_tcp():
     print("Generando claves RSA para comunicacion segura (1024 bits)...")
     client_pub, client_priv = generar_claves_rsa()
 
-    # ── FASE 1: HANDSHAKE RSA ──────────────────────────────
+    # FASE 1: HANDSHAKE RSA 
     f = sock.makefile("r", encoding="utf-8")
     
     client_pub_pem = client_pub.save_pkcs1().decode("utf-8")
@@ -221,14 +221,14 @@ def iniciar_cliente_tcp():
         sock.close()
         return
 
-    # ── FASE 2: AUTORIZACION (CIFRADA) ─────────────────────
+    # FASE 2: AUTORIZACION (CIFRADA) 
     tipo_msg = "login" if opcion == "1" else "register"
     msg_credenciales = crear_mensaje(tipo_msg, usuario, password)
     
     # Enviar encriptado
     sock.sendall(encriptar_rsa(msg_credenciales, server_pub).encode("utf-8") + b"\n")
 
-    # ── Leer respuesta del servidor (CRIPTADA) ──────────────
+    # Leer respuesta del servidor (CRIPTADA) 
     linea_cifrada = f.readline()
     if not linea_cifrada:
         print("No respondio el servidor despues de credenciales.")
@@ -254,10 +254,10 @@ def iniciar_cliente_tcp():
         "Listo, comunicacion cifrada con exito. (/priv <usuario> <msg> privado | /salir)"
     )
 
-    # ── Hilo receptor ──────────────────────────────────────
+    # Hilo receptor 
     threading.Thread(target=recibir_tcp, args=(sock, client_priv), daemon=True).start()
 
-    # ── Hilo emisor ────────────────────────────────────────
+    # Hilo emisor 
     threading.Thread(
         target=enviar_mensajes_tcp, args=(sock, usuario, server_pub), daemon=True
     ).start()
