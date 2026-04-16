@@ -2,6 +2,8 @@ import json
 import os
 import logging
 import bcrypt
+import rsa
+import base64
 from datetime import datetime
 
 
@@ -96,3 +98,37 @@ def leerMensaje(cadena):
 def crear_mensaje(msg_type, sender, text="", target=None):
     """Alias de crearMensaje, usado por client.py."""
     return crearMensaje(msg_type, sender, text, target)
+
+
+# ── Criptografia RSA ──────────────────────────────────────────────
+def generar_claves_rsa():
+    """Genera un par de llaves (Pública, Privada) de 1024 bits."""
+    return rsa.newkeys(1024)
+
+def encriptar_rsa(mensaje_str: str, public_key: rsa.PublicKey) -> str:
+    """Encripta un string utilizando la llave publica en bloques (por tamano de llave) y devuelve Base64."""
+    chunk_size = 117 # Para llave RSA de 1024 bits
+    data = mensaje_str.encode("utf-8")
+    encrypted_chunks = []
+    for i in range(0, len(data), chunk_size):
+        chunk = data[i:i+chunk_size]
+        encrypted_chunks.append(rsa.encrypt(chunk, public_key))
+    combined = b"".join(encrypted_chunks)
+    return base64.b64encode(combined).decode("utf-8")
+
+def desencriptar_rsa(mensaje_b64: str, private_key: rsa.PrivateKey) -> str:
+    """Desencripta un mensaje Base64 utilizando la llave privada."""
+    try:
+        data = base64.b64decode(mensaje_b64.encode("utf-8"))
+    except:
+        return "" # b64 invalido
+        
+    chunk_size = 128 # Bloque encriptado con RSA-1024 siempre es 128 bytes
+    decrypted_chunks = []
+    for i in range(0, len(data), chunk_size):
+        chunk = data[i:i+chunk_size]
+        try:
+            decrypted_chunks.append(rsa.decrypt(chunk, private_key))
+        except rsa.pkcs1.DecryptionError:
+            return "" # Fallo al desencriptar
+    return b"".join(decrypted_chunks).decode("utf-8")

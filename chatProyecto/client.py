@@ -5,7 +5,16 @@
 import socket
 import threading
 import sys
-from utils import crear_mensaje, convertir_mensaje, actual_str
+import json
+import rsa
+from utils import (
+    crear_mensaje,
+    convertir_mensaje,
+    actual_str,
+    generar_claves_rsa,
+    encriptar_rsa,
+    desencriptar_rsa
+)
 
 # CONFIG
 SERVER_HOST = "127.0.0.1"
@@ -14,14 +23,19 @@ PROTOCOL = "TCP"
 
 
 # Hilo que recibe mensajes cuando usamos TCP
-def recibir_tcp(conn):
+def recibir_tcp(conn, client_priv):
     try:
         f = conn.makefile("r", encoding="utf-8")
         for linea in f:
-            linea = linea.strip()
-            if linea == "":
+            dato_cifrado = linea.strip()
+            if dato_cifrado == "":
                 continue
-            msg = convertir_mensaje(linea)
+                
+            dato = desencriptar_rsa(dato_cifrado, client_priv)
+            if not dato:
+                continue
+                
+            msg = convertir_mensaje(dato)
             if msg:
                 mostrar(msg)
     except Exception as e:
@@ -74,7 +88,7 @@ def mostrar(msg):
 
 
 # Envia mensajes cuando se usa TCP
-def enviar_mensajes_tcp(sock, username):
+def enviar_mensajes_tcp(sock, username, server_pub):
     try:
         while True:
             texto = input()
@@ -82,7 +96,8 @@ def enviar_mensajes_tcp(sock, username):
             if texto == "/salir":
                 msg = crear_mensaje("disconnect", username, "salio del chat")
                 try:
-                    sock.sendall(msg.encode("utf-8") + b"\n")
+                    cifrado = encriptar_rsa(msg, server_pub)
+                    sock.sendall(cifrado.encode("utf-8") + b"\n")
                 except:
                     pass
                 print("Saliendo...")
@@ -100,11 +115,13 @@ def enviar_mensajes_tcp(sock, username):
                 dest = partes[1]
                 contenido = partes[2]
                 msg = crear_mensaje("private", username, contenido, dest)
-                sock.sendall(msg.encode("utf-8") + b"\n")
+                cifrado = encriptar_rsa(msg, server_pub)
+                sock.sendall(cifrado.encode("utf-8") + b"\n")
 
             else:
                 msg = crear_mensaje("message", username, texto)
-                sock.sendall(msg.encode("utf-8") + b"\n")
+                cifrado = encriptar_rsa(msg, server_pub)
+                sock.sendall(cifrado.encode("utf-8") + b"\n")
 
     except:
         pass
@@ -175,23 +192,51 @@ def iniciar_cliente_tcp():
         print("No se pudo conectar:", e)
         return
 
-    # Determinar tipo de mensaje segun la opcion elegida
-    tipo_msg = "login" if opcion == "1" else "register"
+    print("Generando claves RSA para comunicacion segura (1024 bits)...")
+    client_pub, client_priv = generar_claves_rsa()
 
-    # Enviar credenciales al servidor
-    # La contrasena viaja en texto plano; el servidor la hashea al registrar
-    # y la compara con bcrypt al hacer login
-    sock.sendall(crear_mensaje(tipo_msg, usuario, password).encode("utf-8") + b"\n")
-
-    # ── Leer respuesta del servidor ────────────────────────
+    # ── FASE 1: HANDSHAKE RSA ──────────────────────────────
     f = sock.makefile("r", encoding="utf-8")
-    linea = f.readline()
-    if not linea:
-        print("No respondio el servidor.")
+    
+    client_pub_pem = client_pub.save_pkcs1().decode("utf-8")
+    handshake_msg = json.dumps({"type": "key_exchange", "key": client_pub_pem})
+    sock.sendall(handshake_msg.encode("utf-8") + b"\n")
+    
+    resp_hs = f.readline()
+    if not resp_hs:
+        print("El servidor cerro la conexion sin enviar llave publica.")
+        sock.close()
+        return
+        
+    hs = convertir_mensaje(resp_hs.strip())
+    if not hs or hs.get("type") != "key_exchange":
+        print("Respuesta de intercambio de llaves invalida.")
+        sock.close()
+        return
+        
+    try:
+        server_pub = rsa.PublicKey.load_pkcs1(hs.get("key").encode("utf-8"))
+    except Exception as e:
+        print("Llave publica del servidor invalida:", e)
         sock.close()
         return
 
-    r = convertir_mensaje(linea.strip())
+    # ── FASE 2: AUTORIZACION (CIFRADA) ─────────────────────
+    tipo_msg = "login" if opcion == "1" else "register"
+    msg_credenciales = crear_mensaje(tipo_msg, usuario, password)
+    
+    # Enviar encriptado
+    sock.sendall(encriptar_rsa(msg_credenciales, server_pub).encode("utf-8") + b"\n")
+
+    # ── Leer respuesta del servidor (CRIPTADA) ──────────────
+    linea_cifrada = f.readline()
+    if not linea_cifrada:
+        print("No respondio el servidor despues de credenciales.")
+        sock.close()
+        return
+
+    linea_plano = desencriptar_rsa(linea_cifrada.strip(), client_priv)
+    r = convertir_mensaje(linea_plano)
     if not r:
         print("Respuesta invalida del servidor.")
         sock.close()
@@ -206,15 +251,15 @@ def iniciar_cliente_tcp():
 
     print(r.get("text"))
     print(
-        "Listo, ya puedes escribir. (/priv <usuario> <msg> para privado | /salir para salir)"
+        "Listo, comunicacion cifrada con exito. (/priv <usuario> <msg> privado | /salir)"
     )
 
     # ── Hilo receptor ──────────────────────────────────────
-    threading.Thread(target=recibir_tcp, args=(sock,), daemon=True).start()
+    threading.Thread(target=recibir_tcp, args=(sock, client_priv), daemon=True).start()
 
     # ── Hilo emisor ────────────────────────────────────────
     threading.Thread(
-        target=enviar_mensajes_tcp, args=(sock, usuario), daemon=True
+        target=enviar_mensajes_tcp, args=(sock, usuario, server_pub), daemon=True
     ).start()
 
     # Mantener el cliente activo

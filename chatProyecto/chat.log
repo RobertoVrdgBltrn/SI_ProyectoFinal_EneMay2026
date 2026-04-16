@@ -13,3 +13,6 @@
 2026-04-13 21:14:14,788 [INFO] REGISTER OK: Paco desde ('127.0.0.1', 52172)
 2026-04-13 21:14:46,365 [ERROR] LOGIN FAIL (contrasena incorrecta): Pachi desde ('127.0.0.1', 56397)
 2026-04-13 21:14:57,069 [ERROR] LOGIN FAIL (contrasena incorrecta): Pachi desde ('127.0.0.1', 56335)
+2026-04-15 23:02:35,758 [INFO] REGISTER OK: testuser desde ('127.0.0.1', 52535)
+2026-04-15 23:02:50,204 [INFO] MSG PUBLICO testuser: Hola mundo! cifrado RSA!
+2026-04-15 23:02:50,235 [INFO] DESCONEXION: testuser

@@ -5,6 +5,8 @@
 import socket
 import threading
 import sys
+import json
+import rsa
 from utils import (
     crearMensaje,
     leerMensaje,
@@ -15,6 +17,10 @@ from utils import (
     verificar_password,
     cargar_usuarios,
     guardar_usuarios,
+    generar_claves_rsa,
+    encriptar_rsa,
+    desencriptar_rsa,
+    convertir_mensaje,
 )
 
 # Configuracion basica del servidor
@@ -24,6 +30,10 @@ MAX_CLIENTS = 6
 PROTOCOL = "TCP"
 
 lock = threading.Lock()
+
+print("Generando claves RSA del servidor (1024 bits)...")
+servidor_pub, servidor_priv = generar_claves_rsa()
+claves_clientes_auth = {} # usuario -> llave publica
 
 if PROTOCOL == "TCP":
     usuarios = {}
@@ -36,44 +46,83 @@ def mandarATodos_tcp(msg_json):
     with lock:
         for nombre, conn in list(usuarios.items()):
             try:
-                conn.sendall(msg_json.encode("utf-8") + b"\n")
+                pub_key = claves_clientes_auth.get(nombre)
+                if pub_key:
+                    cifrado = encriptar_rsa(msg_json, pub_key)
+                    conn.sendall(cifrado.encode("utf-8") + b"\n")
             except:
                 try:
                     conn.close()
                 except:
                     pass
-                del usuarios[nombre]
-
+                if nombre in usuarios:
+                    del usuarios[nombre]
+                if nombre in claves_clientes_auth:
+                    del claves_clientes_auth[nombre]
 
 def mandarPrivado_tcp(user, msg_json):
     with lock:
         dest = usuarios.get(user)
-        if dest:
+        pub_key = claves_clientes_auth.get(user)
+        if dest and pub_key:
             try:
-                dest.sendall(msg_json.encode("utf-8") + b"\n")
+                cifrado = encriptar_rsa(msg_json, pub_key)
+                dest.sendall(cifrado.encode("utf-8") + b"\n")
             except:
                 try:
                     dest.close()
                 except:
                     pass
-                del usuarios[user]
+                if user in usuarios:
+                    del usuarios[user]
+                if user in claves_clientes_auth:
+                    del claves_clientes_auth[user]
 
 
 # Atiende a un cliente TCP individual en un hilo
 def atenderCliente_tcp(conn, addr):
 
     nombreUser = None
+    client_pub_key = None
+
+    def enviar_anonimo(texto_json):
+        if client_pub_key:
+            cifrado = encriptar_rsa(texto_json, client_pub_key)
+            conn.sendall(cifrado.encode("utf-8") + b"\n")
 
     try:
         with conn:
             archivo = conn.makefile("r", encoding="utf-8")
 
-            # Leer primer mensaje (login o register)
+            # ── HANDSHAKE RSA ──────────────────────────────────────────
             primera = archivo.readline()
             if not primera:
                 return
 
-            msg = leerMensaje(primera.strip())
+            handshake_msg = convertir_mensaje(primera.strip())
+            if not handshake_msg or handshake_msg.get("type") != "key_exchange":
+                return
+            
+            try:
+                client_pub_key = rsa.PublicKey.load_pkcs1(handshake_msg.get("key").encode("utf-8"))
+            except:
+                return
+
+            # Responder con la publica del servidor
+            server_pub_str = servidor_pub.save_pkcs1().decode("utf-8")
+            hs_resp = json.dumps({"type": "key_exchange", "key": server_pub_str})
+            conn.sendall(hs_resp.encode("utf-8") + b"\n")
+
+            # ── LEER PRIMER MENSAJE (LOGIN / REGISTER) CIFRADO ─────────
+            segunda = archivo.readline()
+            if not segunda:
+                return
+            
+            desencriptado = desencriptar_rsa(segunda.strip(), servidor_priv)
+            if not desencriptado:
+                return
+
+            msg = leerMensaje(desencriptado)
 
             # ── LOGIN (usuario existente) ──────────────────────────
             if msg and msg.get("type") == "login":
@@ -82,52 +131,26 @@ def atenderCliente_tcp(conn, addr):
                 pw_recibido = msg.get("text", "")
 
                 if pedido not in usuario_bd:
-                    conn.sendall(
-                        crearMensaje(
-                            "login_fail", "SERVER", "Usuario no existe"
-                        ).encode("utf-8")
-                        + b"\n"
-                    )
+                    enviar_anonimo(crearMensaje("login_fail", "SERVER", "Usuario no existe"))
                     log_error(f"LOGIN FAIL (usuario no existe): {pedido} desde {addr}")
                     return
 
                 if not verificar_password(pw_recibido, usuario_bd[pedido]):
-                    conn.sendall(
-                        crearMensaje(
-                            "login_fail", "SERVER", "Contrasena incorrecta"
-                        ).encode("utf-8")
-                        + b"\n"
-                    )
-                    log_error(
-                        f"LOGIN FAIL (contrasena incorrecta): {pedido} desde {addr}"
-                    )
+                    enviar_anonimo(crearMensaje("login_fail", "SERVER", "Contrasena incorrecta"))
+                    log_error(f"LOGIN FAIL (contrasena incorrecta): {pedido} desde {addr}")
                     return
 
                 with lock:
                     if pedido in usuarios:
-                        conn.sendall(
-                            crearMensaje(
-                                "login_fail", "SERVER", "Ya esta conectado"
-                            ).encode("utf-8")
-                            + b"\n"
-                        )
+                        enviar_anonimo(crearMensaje("login_fail", "SERVER", "Ya esta conectado"))
                         return
                     if len(usuarios) >= MAX_CLIENTS:
-                        conn.sendall(
-                            crearMensaje(
-                                "login_fail", "SERVER", "Servidor lleno"
-                            ).encode("utf-8")
-                            + b"\n"
-                        )
+                        enviar_anonimo(crearMensaje("login_fail", "SERVER", "Servidor lleno"))
                         return
                     usuarios[pedido] = conn
+                    claves_clientes_auth[pedido] = client_pub_key
                     nombreUser = pedido
-                    conn.sendall(
-                        crearMensaje("login_ok", "SERVER", "Login correcto").encode(
-                            "utf-8"
-                        )
-                        + b"\n"
-                    )
+                    enviar_anonimo(crearMensaje("login_ok", "SERVER", "Login correcto"))
 
                 log_evento(f"LOGIN OK: {pedido} desde {addr}")
                 print(f"[{fecha_hora()}] {pedido} se conecto desde {addr}")
@@ -138,22 +161,12 @@ def atenderCliente_tcp(conn, addr):
                 pw_texto = msg.get("text", "")
 
                 if not pw_texto:
-                    conn.sendall(
-                        crearMensaje(
-                            "register_fail", "SERVER", "Contrasena vacia"
-                        ).encode("utf-8")
-                        + b"\n"
-                    )
+                    enviar_anonimo(crearMensaje("register_fail", "SERVER", "Contrasena vacia"))
                     return
 
                 usuario_bd = cargar_usuarios()
                 if pedido in usuario_bd:
-                    conn.sendall(
-                        crearMensaje(
-                            "register_fail", "SERVER", "Usuario ya existe"
-                        ).encode("utf-8")
-                        + b"\n"
-                    )
+                    enviar_anonimo(crearMensaje("register_fail", "SERVER", "Usuario ya existe"))
                     log_error(f"REGISTER FAIL (ya existe): {pedido} desde {addr}")
                     return
 
@@ -162,32 +175,18 @@ def atenderCliente_tcp(conn, addr):
 
                 with lock:
                     if len(usuarios) >= MAX_CLIENTS:
-                        conn.sendall(
-                            crearMensaje(
-                                "register_fail", "SERVER", "Servidor lleno"
-                            ).encode("utf-8")
-                            + b"\n"
-                        )
+                        enviar_anonimo(crearMensaje("register_fail", "SERVER", "Servidor lleno"))
                         return
                     usuarios[pedido] = conn
+                    claves_clientes_auth[pedido] = client_pub_key
                     nombreUser = pedido
-                    conn.sendall(
-                        crearMensaje(
-                            "register_ok", "SERVER", "Registro OK, bienvenido"
-                        ).encode("utf-8")
-                        + b"\n"
-                    )
+                    enviar_anonimo(crearMensaje("register_ok", "SERVER", "Registro OK, bienvenido"))
 
                 log_evento(f"REGISTER OK: {pedido} desde {addr}")
                 print(f"[{fecha_hora()}] NUEVO USUARIO {pedido} desde {addr}")
 
             else:
-                conn.sendall(
-                    crearMensaje(
-                        "register_fail", "SERVER", "Primer mensaje invalido"
-                    ).encode("utf-8")
-                    + b"\n"
-                )
+                enviar_anonimo(crearMensaje("register_fail", "SERVER", "Primer mensaje invalido"))
                 return
 
             # Avisar a todos que alguien entro
@@ -197,7 +196,11 @@ def atenderCliente_tcp(conn, addr):
 
             # Leer mensajes del cliente
             for linea in archivo:
-                dato = linea.strip()
+                dato_cifrado = linea.strip()
+                if not dato_cifrado:
+                    continue
+
+                dato = desencriptar_rsa(dato_cifrado, servidor_priv)
                 if not dato:
                     continue
 
@@ -220,15 +223,12 @@ def atenderCliente_tcp(conn, addr):
                         f"[{fecha_hora()}] PRIVADO {msg.get('from')} -> {dest}: {texto}"
                     )
                     log_evento(f"MSG PRIVADO {msg.get('from')} -> {dest}: {texto}")
+                    # Enviar al dest
                     mandarPrivado_tcp(
                         dest, crearMensaje("private", msg.get("from"), texto, dest)
                     )
-                    conn.sendall(
-                        crearMensaje("private", msg.get("from"), texto, dest).encode(
-                            "utf-8"
-                        )
-                        + b"\n"
-                    )
+                    # Devolverse una copia cifrada a sí mismo
+                    enviar_anonimo(crearMensaje("private", msg.get("from"), texto, dest))
 
                 elif tipo == "disconnect":
                     break
@@ -246,6 +246,8 @@ def atenderCliente_tcp(conn, addr):
                     except:
                         pass
                     del usuarios[nombreUser]
+                if nombreUser in claves_clientes_auth:
+                    del claves_clientes_auth[nombreUser]
 
             print(f"[{fecha_hora()}] {nombreUser} se desconecto")
             log_evento(f"DESCONEXION: {nombreUser}")
