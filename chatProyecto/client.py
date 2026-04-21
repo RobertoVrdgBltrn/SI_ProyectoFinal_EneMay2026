@@ -73,7 +73,7 @@ def mostrar(msg):
     if tipo == "system":
         print(f"[{t}] * {txt}")
     elif tipo == "message":
-        print(f"[{t}] {de}: {txt}")
+        print(f"[{t}] [PÚBLICO] {de}: {txt}")
     elif tipo == "private":
         if para:
             print(f"[{t}] [PRIV] {de} -> {para}: {txt}")
@@ -249,10 +249,9 @@ def iniciar_cliente_tcp():
         sock.close()
         return
 
-    print(r.get("text"))
-    print(
-        "Listo, comunicacion cifrada con exito. (/priv <usuario> <msg> privado | /salir)"
-    )
+    print("Listo, comunicacion cifrada con exito.")
+    print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
+    print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
 
     # Hilo receptor 
     threading.Thread(target=recibir_tcp, args=(sock, client_priv), daemon=True).start()
@@ -294,7 +293,9 @@ def iniciar_cliente_udp():
             print("Error:", r.get("text"))
             sock.close()
             return
-        print("Registrado. Ya puedes escribir.")
+        print("Registrado.")
+        print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
+        print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
     except:
         print("No respondio el servidor.")
         sock.close()
