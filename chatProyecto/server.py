@@ -44,6 +44,10 @@ else:
 
 # Envia un mensaje a todos los clientes conectados
 def mandarATodos_tcp(msg_json):
+    """
+    Recibe un mensaje JSON cifrado per-cliente con su respectiva llave publica.
+    Itera sobre la lista de usuarios TCP y lo envía a todos los conectados.
+    """
     with lock:
         for nombre, conn in list(usuarios.items()):
             try:
@@ -62,6 +66,10 @@ def mandarATodos_tcp(msg_json):
                     del claves_clientes_auth[nombre]
 
 def mandarPrivado_tcp(user, msg_json):
+    """
+    Recibe un identificador de usuario y un mensaje, cifra el contenido especificamente
+    con la llave publica guardada para ese usuario y se lo envia de manera unicast.
+    """
     with lock:
         dest = usuarios.get(user)
         pub_key = claves_clientes_auth.get(user)
@@ -82,6 +90,13 @@ def mandarPrivado_tcp(user, msg_json):
 
 # Atiende a un cliente TCP individual en un hilo
 def atenderCliente_tcp(conn, addr):
+    """
+    Ciclo de vida para un socket TCP individual:
+    1. Intercambia llaves RSA públicas.
+    2. Valida credenciales e inscribe al usuario.
+    3. Mantiene un ciclo infinito escuchando peticiones, validando, y transmitiendolás
+       hasta que el cliente cierra sesion.
+    """
 
     nombreUser = None
     client_pub_key = None
@@ -261,6 +276,7 @@ def atenderCliente_tcp(conn, addr):
 
 # Inicia servidor TCP
 def servidor_tcp():
+    """Configura e inicializa el socket TCP maestro. Despacha un hilo 'atenderCliente_tcp' por conexion entrante."""
     print("Servidor TCP iniciado en", HOST, PORT)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST, PORT))
@@ -281,6 +297,10 @@ def servidor_tcp():
 
 # Inicia servidor UDP
 def servidor_udp():
+    """
+    Configura e inicializa el socket UDP maestro en un único hilo. Actúa como un bucle 
+    de eventos simple (recepcion y difusion en base de los datagramas recividos).
+    """
     print("Servidor UDP iniciado en", HOST, PORT)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((HOST, PORT))

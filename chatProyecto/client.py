@@ -25,6 +25,10 @@ PROTOCOL = "TCP"
 
 # Hilo que recibe mensajes cuando usamos TCP
 def recibir_tcp(conn, client_priv):
+    """
+    Lee en ciclo del socket, captura tramas, desencripta en base a la llave privada RSA 
+    local, convierte JSON validado, e imprime a pantalla de los clientes locales.
+    """
     try:
         f = conn.makefile("r", encoding="utf-8")
         for linea in f:
@@ -50,6 +54,7 @@ def recibir_tcp(conn, client_priv):
 
 # Hilo que recibe datagramas cuando usamos UDP
 def recibir_udp(sock):
+    """Captura paquetes de la red UDP en crudo y evalua si son mensajes de chat."""
     try:
         while True:
             datos, addr = sock.recvfrom(65535)
@@ -65,6 +70,7 @@ def recibir_udp(sock):
 
 # Imprime mensajes de forma ordenada
 def mostrar(msg):
+    """Toma un diccionario de mensaje verificado e imprime en consola del cliente de manera visualizada"""
     tipo = msg.get("type")
     t = msg.get("time")
     de = msg.get("from")
@@ -90,9 +96,12 @@ def mostrar(msg):
 
 # Envia mensajes cuando se usa TCP
 def enviar_mensajes_tcp(sock, username, server_pub):
+    """Captura todo el texto (input) que ingresa el cliente, lo cifra con la llave del server, y envía."""
     try:
         while True:
             texto = input()
+            if not texto:
+                continue
 
             if texto == "/salir":
                 msg = crear_mensaje("disconnect", username, "salio del chat")
@@ -165,6 +174,7 @@ def enviar_mensajes_udp(sock, username, server_addr):
 
 # Inicio del cliente TCP
 def iniciar_cliente_tcp():
+    """Bucle de registro principal para TCP, se comunica a la red con claves, desencripta y arranca los hilos emisor/receptor."""
     while True:
         # Menú de autenticacion 
         print("1) Iniciar sesion")
