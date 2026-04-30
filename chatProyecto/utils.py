@@ -1,9 +1,11 @@
 import json
 import os
 import logging
+import logging.handlers
 import bcrypt
 import rsa
 import base64
+import re
 from datetime import datetime
 
 
@@ -23,7 +25,10 @@ LOG_FILE = "chat.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()],
+    handlers=[
+        logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=5, encoding="utf-8"),
+        logging.StreamHandler()
+    ],
 )
 
 
@@ -69,6 +74,37 @@ def guardar_usuarios(usuarios: dict):
         json.dump(usuarios, f, indent=2)
 
 
+# Sanitizacion y Validacion
+def sanitizar_texto(texto: str) -> str:
+    """Remueve caracteres de control que podrian afectar la terminal o JSON."""
+    if not isinstance(texto, str):
+        return ""
+    texto_limpio = re.sub(r'[\x00-\x1f\x7f]', '', texto)
+    return texto_limpio.strip()
+
+def validar_mensaje(msg: dict) -> bool:
+    """Valida los campos y longitudes del diccionario para evitar datos maliciosos."""
+    if not isinstance(msg, dict):
+        return False
+        
+    de = msg.get("from")
+    if de is not None and (not isinstance(de, str) or len(de) > 30):
+        return False
+        
+    para = msg.get("to")
+    if para is not None and (not isinstance(para, str) or len(para) > 30):
+        return False
+        
+    texto = msg.get("text")
+    if texto is not None and (not isinstance(texto, str) or len(texto) > 2000):
+        return False
+        
+    key = msg.get("key")
+    if key is not None and (not isinstance(key, str) or len(key) > 5000):
+        return False
+
+    return True
+
 # Mensajes JSON 
 def crearMensaje(tipo, quien, texto="", para=None):
     """
@@ -78,6 +114,10 @@ def crearMensaje(tipo, quien, texto="", para=None):
     texto = contenido principal del mensaje
     para  = destinatario si el mensaje es privado
     """
+    quien = sanitizar_texto(quien) if quien else quien
+    texto = sanitizar_texto(texto) if texto else texto
+    para = sanitizar_texto(para) if para else para
+    
     msg = {"type": tipo, "from": quien, "to": para, "text": texto, "time": fecha_hora()}
     return json.dumps(msg)
 

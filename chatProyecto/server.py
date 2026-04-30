@@ -21,6 +21,7 @@ from utils import (
     encriptar_rsa,
     desencriptar_rsa,
     convertir_mensaje,
+    validar_mensaje,
 )
 
 # Configuracion basica del servidor
@@ -100,7 +101,7 @@ def atenderCliente_tcp(conn, addr):
                 return
 
             handshake_msg = convertir_mensaje(primera.strip())
-            if not handshake_msg or handshake_msg.get("type") != "key_exchange":
+            if not handshake_msg or handshake_msg.get("type") != "key_exchange" or not validar_mensaje(handshake_msg):
                 return
             
             try:
@@ -123,6 +124,8 @@ def atenderCliente_tcp(conn, addr):
                 return
 
             msg = leerMensaje(desencriptado)
+            if not msg or not validar_mensaje(msg):
+                return
 
             # LOGIN (usuario existente) 
             if msg and msg.get("type") == "login":
@@ -205,7 +208,7 @@ def atenderCliente_tcp(conn, addr):
                     continue
 
                 msg = leerMensaje(dato)
-                if not msg:
+                if not msg or not validar_mensaje(msg):
                     continue
 
                 tipo = msg.get("type")
@@ -287,7 +290,7 @@ def servidor_udp():
             data, addr = s.recvfrom(60000)
             txt = data.decode("utf-8").strip()
             msg = leerMensaje(txt)
-            if not msg:
+            if not msg or not validar_mensaje(msg):
                 continue
 
             tipo = msg.get("type")

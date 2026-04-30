@@ -13,7 +13,8 @@ from utils import (
     actual_str,
     generar_claves_rsa,
     encriptar_rsa,
-    desencriptar_rsa
+    desencriptar_rsa,
+    validar_mensaje
 )
 
 # CONFIG
@@ -36,7 +37,7 @@ def recibir_tcp(conn, client_priv):
                 continue
                 
             msg = convertir_mensaje(dato)
-            if msg:
+            if msg and validar_mensaje(msg):
                 mostrar(msg)
     except Exception as e:
         print("Conexion cerrada o error:", e)
@@ -54,7 +55,7 @@ def recibir_udp(sock):
             datos, addr = sock.recvfrom(65535)
             try:
                 msg = convertir_mensaje(datos.decode("utf-8"))
-                if msg:
+                if msg and validar_mensaje(msg):
                     mostrar(msg)
             except:
                 pass
@@ -164,150 +165,158 @@ def enviar_mensajes_udp(sock, username, server_addr):
 
 # Inicio del cliente TCP
 def iniciar_cliente_tcp():
+    while True:
+        # Menú de autenticacion 
+        print("1) Iniciar sesion")
+        print("2) Registrarse")
+        opcion = input("Elige una opcion: ").strip()
 
-    # Menú de autenticacion 
-    print("1) Iniciar sesion")
-    print("2) Registrarse")
-    opcion = input("Elige una opcion: ").strip()
+        if opcion not in ("1", "2"):
+            print("Opcion invalida. Intenta nuevamente.\n")
+            continue
 
-    if opcion not in ("1", "2"):
-        print("Opcion invalida.")
-        return
+        usuario = input("Nombre de usuario: ").strip()
+        if not usuario:
+            print("El nombre no puede estar vacio. Intenta nuevamente.\n")
+            continue
 
-    usuario = input("Nombre de usuario: ").strip()
-    if not usuario:
-        print("El nombre no puede estar vacio.")
-        return
+        password = input("Contrasena: ").strip()
+        if not password:
+            print("La contrasena no puede estar vacia. Intenta nuevamente.\n")
+            continue
 
-    password = input("Contrasena: ").strip()
-    if not password:
-        print("La contrasena no puede estar vacia.")
-        return
-
-    # Conexion al servidor 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.connect((SERVER_HOST, SERVER_PORT))
-    except Exception as e:
-        print("No se pudo conectar:", e)
-        return
-
-    print("Generando claves RSA para comunicacion segura (1024 bits)...")
-    client_pub, client_priv = generar_claves_rsa()
-
-    # FASE 1: HANDSHAKE RSA 
-    f = sock.makefile("r", encoding="utf-8")
-    
-    client_pub_pem = client_pub.save_pkcs1().decode("utf-8")
-    handshake_msg = json.dumps({"type": "key_exchange", "key": client_pub_pem})
-    sock.sendall(handshake_msg.encode("utf-8") + b"\n")
-    
-    resp_hs = f.readline()
-    if not resp_hs:
-        print("El servidor cerro la conexion sin enviar llave publica.")
-        sock.close()
-        return
-        
-    hs = convertir_mensaje(resp_hs.strip())
-    if not hs or hs.get("type") != "key_exchange":
-        print("Respuesta de intercambio de llaves invalida.")
-        sock.close()
-        return
-        
-    try:
-        server_pub = rsa.PublicKey.load_pkcs1(hs.get("key").encode("utf-8"))
-    except Exception as e:
-        print("Llave publica del servidor invalida:", e)
-        sock.close()
-        return
-
-    # FASE 2: AUTORIZACION (CIFRADA) 
-    tipo_msg = "login" if opcion == "1" else "register"
-    msg_credenciales = crear_mensaje(tipo_msg, usuario, password)
-    
-    # Enviar encriptado
-    sock.sendall(encriptar_rsa(msg_credenciales, server_pub).encode("utf-8") + b"\n")
-
-    # Leer respuesta del servidor (CRIPTADA) 
-    linea_cifrada = f.readline()
-    if not linea_cifrada:
-        print("No respondio el servidor despues de credenciales.")
-        sock.close()
-        return
-
-    linea_plano = desencriptar_rsa(linea_cifrada.strip(), client_priv)
-    r = convertir_mensaje(linea_plano)
-    if not r:
-        print("Respuesta invalida del servidor.")
-        sock.close()
-        return
-
-    tipo_resp = r.get("type")
-
-    if tipo_resp in ("register_fail", "login_fail"):
-        print("Error:", r.get("text"))
-        sock.close()
-        return
-
-    print("Listo, comunicacion cifrada con exito.")
-    print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
-    print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
-
-    # Hilo receptor 
-    threading.Thread(target=recibir_tcp, args=(sock, client_priv), daemon=True).start()
-
-    # Hilo emisor 
-    threading.Thread(
-        target=enviar_mensajes_tcp, args=(sock, usuario, server_pub), daemon=True
-    ).start()
-
-    # Mantener el cliente activo
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
+        # Conexion al servidor 
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            sock.connect((SERVER_HOST, SERVER_PORT))
+        except Exception as e:
+            print("No se pudo conectar al servidor:", e, "\nIntenta de nuevo.\n")
+            continue
+
+        print("Generando claves RSA para comunicacion segura (1024 bits)...")
+        client_pub, client_priv = generar_claves_rsa()
+
+        # FASE 1: HANDSHAKE RSA 
+        f = sock.makefile("r", encoding="utf-8")
+        
+        client_pub_pem = client_pub.save_pkcs1().decode("utf-8")
+        handshake_msg = json.dumps({"type": "key_exchange", "key": client_pub_pem})
+        sock.sendall(handshake_msg.encode("utf-8") + b"\n")
+        
+        resp_hs = f.readline()
+        if not resp_hs:
+            print("El servidor cerro la conexion sin enviar llave publica. Intenta de nuevo.\n")
             sock.close()
-        except:
-            pass
-        print("Cliente TCP cerrado.")
+            continue
+            
+        hs = convertir_mensaje(resp_hs.strip())
+        if not hs or hs.get("type") != "key_exchange" or not validar_mensaje(hs):
+            print("Respuesta de intercambio de llaves invalida. Intenta de nuevo.\n")
+            sock.close()
+            continue
+            
+        try:
+            server_pub = rsa.PublicKey.load_pkcs1(hs.get("key").encode("utf-8"))
+        except Exception as e:
+            print("Llave publica del servidor invalida:", e, "\nIntenta de nuevo.\n")
+            sock.close()
+            continue
+
+        # FASE 2: AUTORIZACION (CIFRADA) 
+        tipo_msg = "login" if opcion == "1" else "register"
+        msg_credenciales = crear_mensaje(tipo_msg, usuario, password)
+        
+        # Enviar encriptado
+        sock.sendall(encriptar_rsa(msg_credenciales, server_pub).encode("utf-8") + b"\n")
+
+        # Leer respuesta del servidor (CRIPTADA) 
+        linea_cifrada = f.readline()
+        if not linea_cifrada:
+            print("No respondio el servidor despues de enviar credenciales. Intenta de nuevo.\n")
+            sock.close()
+            continue
+
+        linea_plano = desencriptar_rsa(linea_cifrada.strip(), client_priv)
+        r = convertir_mensaje(linea_plano)
+        if not r or not validar_mensaje(r):
+            print("Respuesta invalida del servidor. Intenta de nuevo.\n")
+            sock.close()
+            continue
+
+        tipo_resp = r.get("type")
+
+        if tipo_resp in ("register_fail", "login_fail"):
+            print("Error del servidor:", r.get("text"), "\nPor favor, intenta nuevamente.\n")
+            sock.close()
+            continue
+
+        print("Listo, comunicacion cifrada con exito.")
+        print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
+        print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
+
+        # Hilo receptor 
+        threading.Thread(target=recibir_tcp, args=(sock, client_priv), daemon=True).start()
+
+        # Hilo emisor 
+        threading.Thread(
+            target=enviar_mensajes_tcp, args=(sock, usuario, server_pub), daemon=True
+        ).start()
+
+        # Mantener el cliente activo
+        try:
+            while True:
+                pass
+        except KeyboardInterrupt:
+            try:
+                sock.close()
+            except:
+                pass
+            print("Cliente TCP cerrado.")
+            break
 
 
 # Inicio del cliente UDP
 def iniciar_cliente_udp():
-    usuario = input("Nombre usuario: ").strip()
-    if usuario == "":
-        print("No pusiste nombre.")
-        return
+    while True:
+        usuario = input("Nombre usuario: ").strip()
+        if usuario == "":
+            print("No pusiste nombre. Intenta nuevamente.\n")
+            continue
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_addr = (SERVER_HOST, SERVER_PORT)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server_addr = (SERVER_HOST, SERVER_PORT)
 
-    sock.sendto(crear_mensaje("register", usuario).encode("utf-8"), server_addr)
+        sock.sendto(crear_mensaje("register", usuario).encode("utf-8"), server_addr)
 
-    sock.settimeout(5)
-    try:
-        datos, _ = sock.recvfrom(65535)
-        r = convertir_mensaje(datos.decode("utf-8"))
-        if r.get("type") == "register_fail":
-            print("Error:", r.get("text"))
+        sock.settimeout(5)
+        try:
+            datos, _ = sock.recvfrom(65535)
+            r = convertir_mensaje(datos.decode("utf-8"))
+            if not r or not validar_mensaje(r):
+                print("Respuesta invalida del servidor UDP. Intenta de nuevo.\n")
+                sock.close()
+                continue
+
+            if r.get("type") == "register_fail":
+                print("Error:", r.get("text"), "\nIntenta de nuevo.\n")
+                sock.close()
+                continue
+            print("Registrado.")
+            print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
+            print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
+        except:
+            print("No respondio el servidor o se agoto el tiempo. Verifica que este encendido.\n")
             sock.close()
-            return
-        print("Registrado.")
-        print("--- BIENVENIDO A LA SALA PÚBLICA (BROADCAST) ---")
-        print("Escribe tus mensajes para hablar por la sala publica, o usa /priv <usuario> <msg> para privados. (/salir para terminar)")
-    except:
-        print("No respondio el servidor.")
+            continue
+        finally:
+            sock.settimeout(None)
+
+        threading.Thread(target=recibir_udp, args=(sock,), daemon=True).start()
+
+        enviar_mensajes_udp(sock, usuario, server_addr)
+
         sock.close()
-        return
-    finally:
-        sock.settimeout(None)
-
-    threading.Thread(target=recibir_udp, args=(sock,), daemon=True).start()
-
-    enviar_mensajes_udp(sock, usuario, server_addr)
-
-    sock.close()
+        break
 
 
 if __name__ == "__main__":
