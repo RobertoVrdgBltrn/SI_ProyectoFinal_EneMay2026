@@ -11,11 +11,12 @@ from datetime import datetime
 
 # Fecha y hora 
 def fecha_hora():
-    """Devuelve la fecha y hora actual como texto."""
+    """Obtiene y formatea la fecha y hora actual del sistema."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def actual_str():
+    """Alias para obtener la fecha y hora actual, utilizado para estampas de tiempo."""
     return fecha_hora()
 
 
@@ -33,25 +34,25 @@ logging.basicConfig(
 
 
 def log_evento(msg):
-    """Escribe una linea informativa en el log."""
+    """Registra un mensaje informativo en el archivo de log y en la consola."""
     logging.info(msg)
 
 
 def log_error(msg):
-    """Escribe una linea de error en el log."""
+    """Registra un mensaje de error en el archivo de log y en la consola."""
     logging.error(msg)
 
 
 # Hasheo de contrasenas 
 def hashear_password(password: str) -> str:
-    """Recibe texto plano, devuelve el hash bcrypt como string."""
+    """Genera un hash seguro utilizando bcrypt para almacenar la contraseña."""
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
 
 def verificar_password(password: str, hashed: str) -> bool:
-    """Compara texto plano con el hash almacenado. Devuelve True si coinciden."""
+    """Compara una contraseña en texto plano con su hash almacenado usando bcrypt."""
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
@@ -60,8 +61,10 @@ USUARIOS_FILE = "usuarios.json"
 
 
 def cargar_usuarios() -> dict:
-    """Carga el diccionario {usuario: hash} desde disco.
-    Si el archivo no existe, devuelve un diccionario vacio."""
+    """
+    Lee el archivo de base de datos JSON y carga los usuarios registrados.
+    Si el archivo no existe, devuelve un diccionario vacío.
+    """
     if not os.path.exists(USUARIOS_FILE):
         return {}
     with open(USUARIOS_FILE, "r", encoding="utf-8") as f:
@@ -69,21 +72,21 @@ def cargar_usuarios() -> dict:
 
 
 def guardar_usuarios(usuarios: dict):
-    """Guarda el diccionario {usuario: hash} en disco."""
+    """Guarda el diccionario de usuarios actualizados en el archivo JSON."""
     with open(USUARIOS_FILE, "w", encoding="utf-8") as f:
         json.dump(usuarios, f, indent=2)
 
 
 # Sanitizacion y Validacion
 def sanitizar_texto(texto: str) -> str:
-    """Remueve caracteres de control que podrian afectar la terminal o JSON."""
+    """Limpia el texto ingresado eliminando caracteres de control que puedan causar errores en JSON o terminal."""
     if not isinstance(texto, str):
         return ""
     texto_limpio = re.sub(r'[\x00-\x1f\x7f]', '', texto)
     return texto_limpio.strip()
 
 def validar_mensaje(msg: dict) -> bool:
-    """Valida los campos y longitudes del diccionario para evitar datos maliciosos."""
+    """Comprueba que la estructura y longitud de los datos del mensaje sean correctas y seguras."""
     if not isinstance(msg, dict):
         return False
         
@@ -108,11 +111,8 @@ def validar_mensaje(msg: dict) -> bool:
 # Mensajes JSON 
 def crearMensaje(tipo, quien, texto="", para=None):
     """
-    Crea un mensaje JSON listo para enviar por red.
-    tipo  = tipo de mensaje (register, login, message, private, etc.)
-    quien = usuario que manda el mensaje
-    texto = contenido principal del mensaje
-    para  = destinatario si el mensaje es privado
+    Empaqueta los datos en un diccionario y los convierte a formato JSON para su envío por la red.
+    Se asegura de sanitizar el texto antes de empaquetarlo.
     """
     quien = sanitizar_texto(quien) if quien else quien
     texto = sanitizar_texto(texto) if texto else texto
@@ -123,7 +123,7 @@ def crearMensaje(tipo, quien, texto="", para=None):
 
 
 def convertir_mensaje(cadena):
-    """Convierte texto JSON a un objeto de Python. Devuelve None si falla."""
+    """Parsea una cadena JSON recibida y la convierte a un diccionario de Python. Retorna None si falla."""
     try:
         return json.loads(cadena)
     except:
@@ -131,22 +131,22 @@ def convertir_mensaje(cadena):
 
 
 def leerMensaje(cadena):
-    """Alias de convertir_mensaje, usado por server.py."""
+    """Convierte una cadena JSON a un objeto Python (Alias usado en el servidor)."""
     return convertir_mensaje(cadena)
 
 
 def crear_mensaje(msg_type, sender, text="", target=None):
-    """Alias de crearMensaje, usado por client.py."""
+    """Construye un mensaje en formato JSON listo para enviar (Alias usado en el cliente)."""
     return crearMensaje(msg_type, sender, text, target)
 
 
 # Criptografia RSA 
 def generar_claves_rsa():
-    """Genera un par de llaves (Pública, Privada) de 1024 bits."""
+    """Crea un nuevo par de claves RSA (pública y privada) de 1024 bits para encriptación."""
     return rsa.newkeys(1024)
 
 def encriptar_rsa(mensaje_str: str, public_key: rsa.PublicKey) -> str:
-    """Encripta un string utilizando la llave publica en bloques (por tamano de llave) y devuelve Base64."""
+    """Cifra un texto en bloques utilizando una llave pública RSA y lo codifica en formato Base64."""
     chunk_size = 117 # Para llave RSA de 1024 bits
     data = mensaje_str.encode("utf-8")
     encrypted_chunks = []
@@ -157,7 +157,7 @@ def encriptar_rsa(mensaje_str: str, public_key: rsa.PublicKey) -> str:
     return base64.b64encode(combined).decode("utf-8")
 
 def desencriptar_rsa(mensaje_b64: str, private_key: rsa.PrivateKey) -> str:
-    """Desencripta un mensaje Base64 utilizando la llave privada."""
+    """Decodifica un mensaje en Base64 y lo descifra por bloques usando una llave privada RSA."""
     try:
         data = base64.b64decode(mensaje_b64.encode("utf-8"))
     except:

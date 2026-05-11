@@ -26,8 +26,8 @@ PROTOCOL = "TCP"
 # Hilo que recibe mensajes cuando usamos TCP
 def recibir_tcp(conn, client_priv):
     """
-    Lee en ciclo del socket, captura tramas, desencripta en base a la llave privada RSA 
-    local, convierte JSON validado, e imprime a pantalla de los clientes locales.
+    Hilo encargado de escuchar continuamente el socket TCP, descifrar los 
+    mensajes recibidos con la llave privada y mostrarlos en pantalla.
     """
     try:
         f = conn.makefile("r", encoding="utf-8")
@@ -54,7 +54,7 @@ def recibir_tcp(conn, client_priv):
 
 # Hilo que recibe datagramas cuando usamos UDP
 def recibir_udp(sock):
-    """Captura paquetes de la red UDP en crudo y evalua si son mensajes de chat."""
+    """Hilo encargado de escuchar y procesar datagramas UDP entrantes para mostrarlos en la consola."""
     try:
         while True:
             datos, addr = sock.recvfrom(65535)
@@ -70,7 +70,7 @@ def recibir_udp(sock):
 
 # Imprime mensajes de forma ordenada
 def mostrar(msg):
-    """Toma un diccionario de mensaje verificado e imprime en consola del cliente de manera visualizada"""
+    """Aplica formato visual a los mensajes recibidos dependiendo de su tipo (público, privado, sistema) para imprimirlos."""
     tipo = msg.get("type")
     t = msg.get("time")
     de = msg.get("from")
@@ -96,7 +96,7 @@ def mostrar(msg):
 
 # Envia mensajes cuando se usa TCP
 def enviar_mensajes_tcp(sock, username, server_pub):
-    """Captura todo el texto (input) que ingresa el cliente, lo cifra con la llave del server, y envía."""
+    """Captura la entrada del teclado del usuario, construye el mensaje, lo encripta con la llave pública del servidor y lo envía por TCP."""
     try:
         while True:
             texto = input()
@@ -139,6 +139,7 @@ def enviar_mensajes_tcp(sock, username, server_pub):
 
 # Envia mensajes cuando se usa UDP
 def enviar_mensajes_udp(sock, username, server_addr):
+    """Captura la entrada del usuario y la envía directamente al servidor mediante UDP sin encriptar."""
     try:
         while True:
             linea = input()
@@ -174,7 +175,10 @@ def enviar_mensajes_udp(sock, username, server_addr):
 
 # Inicio del cliente TCP
 def iniciar_cliente_tcp():
-    """Bucle de registro principal para TCP, se comunica a la red con claves, desencripta y arranca los hilos emisor/receptor."""
+    """
+    Inicia el cliente en modo TCP: maneja el menú inicial, el intercambio de llaves RSA, 
+    el inicio de sesión o registro, y finalmente lanza los hilos de comunicación.
+    """
     while True:
         # Menú de autenticacion 
         print("1) Iniciar sesion")
@@ -287,6 +291,10 @@ def iniciar_cliente_tcp():
 
 # Inicio del cliente UDP
 def iniciar_cliente_udp():
+    """
+    Inicia el cliente en modo UDP: maneja el registro inicial básico del nombre de usuario 
+    y lanza los hilos necesarios para enviar y recibir datos.
+    """
     while True:
         usuario = input("Nombre usuario: ").strip()
         if usuario == "":

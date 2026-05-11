@@ -45,8 +45,8 @@ else:
 # Envia un mensaje a todos los clientes conectados
 def mandarATodos_tcp(msg_json):
     """
-    Recibe un mensaje JSON cifrado per-cliente con su respectiva llave publica.
-    Itera sobre la lista de usuarios TCP y lo envía a todos los conectados.
+    Toma un mensaje JSON, lo encripta individualmente para cada cliente conectado 
+    usando sus respectivas llaves públicas, y lo retransmite a todos de forma segura.
     """
     with lock:
         for nombre, conn in list(usuarios.items()):
@@ -67,8 +67,8 @@ def mandarATodos_tcp(msg_json):
 
 def mandarPrivado_tcp(user, msg_json):
     """
-    Recibe un identificador de usuario y un mensaje, cifra el contenido especificamente
-    con la llave publica guardada para ese usuario y se lo envia de manera unicast.
+    Busca la conexión de un usuario específico, encripta el mensaje con su llave pública 
+    y se lo envía de manera privada (unicast).
     """
     with lock:
         dest = usuarios.get(user)
@@ -91,11 +91,8 @@ def mandarPrivado_tcp(user, msg_json):
 # Atiende a un cliente TCP individual en un hilo
 def atenderCliente_tcp(conn, addr):
     """
-    Ciclo de vida para un socket TCP individual:
-    1. Intercambia llaves RSA públicas.
-    2. Valida credenciales e inscribe al usuario.
-    3. Mantiene un ciclo infinito escuchando peticiones, validando, y transmitiendolás
-       hasta que el cliente cierra sesion.
+    Gestiona el ciclo de vida de un usuario TCP en un hilo independiente: realiza el 
+    intercambio de llaves (Handshake), maneja la autenticación y escucha sus peticiones continuamente.
     """
 
     nombreUser = None
@@ -276,7 +273,7 @@ def atenderCliente_tcp(conn, addr):
 
 # Inicia servidor TCP
 def servidor_tcp():
-    """Configura e inicializa el socket TCP maestro. Despacha un hilo 'atenderCliente_tcp' por conexion entrante."""
+    """Inicializa el socket principal del servidor TCP y lanza un nuevo hilo 'atenderCliente_tcp' por cada cliente nuevo."""
     print("Servidor TCP iniciado en", HOST, PORT)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST, PORT))
@@ -298,8 +295,8 @@ def servidor_tcp():
 # Inicia servidor UDP
 def servidor_udp():
     """
-    Configura e inicializa el socket UDP maestro en un único hilo. Actúa como un bucle 
-    de eventos simple (recepcion y difusion en base de los datagramas recividos).
+    Inicializa el servidor UDP. Actúa como un bucle centralizado que recibe todos 
+    los datagramas, analiza el tipo de solicitud y redirige los mensajes a sus destinatarios.
     """
     print("Servidor UDP iniciado en", HOST, PORT)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
